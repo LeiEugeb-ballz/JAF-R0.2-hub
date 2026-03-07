@@ -1,0 +1,7 @@
+body { background: #121212; color: #e0e0e0; font-family: Arial; }
+.app { padding: 20px; }
+nav { margin-bottom: 20px; }
+nav a { color: #00bcd4; margin: 0 10px; text-decoration: none; }
+.agent-card { background: #333; padding: 10px; margin: 10px 0; border-radius: 5px; }
+.online { border: 2px solid green; }
+.offline { border: 2px solid red; }
