@@ -128,6 +128,26 @@
   letter-spacing: 0.12em;
 }
 
+.status-pill.offline {
+  background: rgba(255, 140, 60, 0.2);
+  color: var(--accent);
+}
+
+.app-shell.offline .ambient-orbit {
+  border-color: rgba(255, 140, 60, 0.25);
+  box-shadow: 0 0 120px rgba(255, 140, 60, 0.25);
+}
+
+.app-shell.offline .content {
+  border-color: rgba(255, 140, 60, 0.35);
+  box-shadow: 0 24px 50px rgba(255, 140, 60, 0.15);
+}
+
+.app-shell.offline .sidebar-footer {
+  border-color: rgba(255, 140, 60, 0.3);
+  background: rgba(255, 140, 60, 0.08);
+}
+
 .main {
   flex: 1;
   padding: 30px 40px 40px;
@@ -372,6 +392,30 @@ textarea {
   margin-bottom: 20px;
 }
 
+.offline-banner {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 140, 60, 0.4);
+  background: rgba(255, 140, 60, 0.12);
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.model-toast {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 209, 161, 0.35);
+  background: rgba(31, 209, 161, 0.12);
+  color: var(--text);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .chat-controls {
   background: rgba(8, 10, 14, 0.75);
   border: 1px solid var(--border);
@@ -560,6 +604,37 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.error-log {
+  background: rgba(8, 10, 14, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.error-log summary {
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.error-log-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.error-log-item {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 80, 80, 0.3);
 }
 
 .panel textarea {

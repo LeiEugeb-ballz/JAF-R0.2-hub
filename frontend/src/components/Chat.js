@@ -10,6 +10,13 @@ const LOCAL_CACHE_KEY = 'jaf_chat_cache_v1';
 const MAX_LOCAL_MESSAGES = 200;
 const MAX_LOCAL_CHARS = 100000;
 
+const OFFLINE_FALLBACKS = ['qwen2.5:7b-instruct', 'qwen2.5:latest'];
+
+function isCloudModelName(name) {
+  if (!name) return false;
+  return /(:cloud|-cloud)$/.test(name);
+}
+
 const MODEL_CATALOG = [
   { id: 'qwen2.5:latest', source: 'ollama' },
   { id: 'qwen2.5:7b-instruct', source: 'ollama' },
@@ -91,21 +98,27 @@ export default function Chat() {
   const [historyStatus, setHistoryStatus] = useState('idle');
   const [modelsStatus, setModelsStatus] = useState('idle');
   const [availableModels, setAvailableModels] = useState(null);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [offlineFallbackEnabled, setOfflineFallbackEnabled] = useState(true);
   const [antigravityEnabled, setAntigravityEnabled] = useState(true);
   const [streaming, setStreaming] = useState(false);
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState('');
+  const [modelNotice, setModelNotice] = useState('');
+  const [errorLog, setErrorLog] = useState([]);
   const [lastLatency, setLastLatency] = useState(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
 
   const bottomRef = useRef(null);
-  const threadRef = useRef(null);
   const abortRef = useRef(null);
   const historySaveTimer = useRef(null);
   const cacheSaveTimer = useRef(null);
   const localCacheRef = useRef(null);
   const latestMessagesRef = useRef(messages);
+  const previousModelRef = useRef(null);
+  const noticeTimerRef = useRef(null);
   const latestSettingsRef = useRef({
     model,
     systemPrompt,
@@ -132,11 +145,27 @@ export default function Chat() {
       setModelsStatus('idle');
     } catch (err) {
       setModelsStatus('error');
+      setErrorLog((prev) => [
+        { id: createId(), message: err?.message || 'Failed to load Ollama models', ts: Date.now() },
+        ...prev,
+      ].slice(0, 5));
     }
   };
 
   useEffect(() => {
     refreshModels();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -148,6 +177,9 @@ export default function Chat() {
     if (typeof cached.temperature === 'number') setTemperature(cached.temperature);
     if (typeof cached.memoryEnabled === 'boolean') setMemoryEnabled(cached.memoryEnabled);
     if (typeof cached.antigravityEnabled === 'boolean') setAntigravityEnabled(cached.antigravityEnabled);
+    if (typeof cached.offlineFallbackEnabled === 'boolean') {
+      setOfflineFallbackEnabled(cached.offlineFallbackEnabled);
+    }
     if (Array.isArray(cached.messages) && cached.messages.length) {
       setMessages(
         cached.messages.map((msg) => ({
@@ -161,21 +193,8 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    const el = threadRef.current;
-    if (!el) return undefined;
-    const handleScroll = () => {
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      setAutoScroll(nearBottom);
-    };
-    handleScroll();
-    el.addEventListener('scroll', handleScroll);
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    if (!autoScroll) return;
     bottomRef.current?.scrollIntoView({ behavior: streaming ? 'auto' : 'smooth' });
-  }, [messages, streaming, autoScroll]);
+  }, [messages, streaming]);
 
   useEffect(() => {
     let active = true;
@@ -239,6 +258,46 @@ export default function Chat() {
     };
   }, [model, systemPrompt, temperature, memoryEnabled, antigravityEnabled]);
 
+  const fallbackModel = useMemo(() => {
+    if (availableModels && availableModels.size > 0) {
+      for (const candidate of OFFLINE_FALLBACKS) {
+        if (availableModels.has(candidate)) return candidate;
+      }
+      const local = Array.from(availableModels).find((name) => !isCloudModelName(name));
+      if (local) return local;
+    }
+    return OFFLINE_FALLBACKS[0];
+  }, [availableModels]);
+
+  useEffect(() => {
+    if (!previousModelRef.current) {
+      previousModelRef.current = model;
+      return;
+    }
+    if (previousModelRef.current !== model) {
+      const wasCloud = isCloudModelName(previousModelRef.current);
+      const isNowCloud = isCloudModelName(model);
+      const notice = !isOnline && wasCloud && !isNowCloud
+        ? `Offline fallback: switched to ${model}.`
+        : `Model switched to ${model}.`;
+      setModelNotice(notice);
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      noticeTimerRef.current = setTimeout(() => setModelNotice(''), 3500);
+      previousModelRef.current = model;
+    }
+  }, [model, isOnline]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('jaf:model-change', { detail: { model } }));
+  }, [model]);
+
+  useEffect(() => {
+    if (!isOnline && offlineFallbackEnabled && isCloudModelName(model)) {
+      setModel(fallbackModel);
+    }
+  }, [isOnline, model, fallbackModel, offlineFallbackEnabled]);
+
   useEffect(() => {
     if (cacheSaveTimer.current) {
       clearTimeout(cacheSaveTimer.current);
@@ -251,11 +310,21 @@ export default function Chat() {
         temperature,
         memoryEnabled,
         antigravityEnabled,
+        offlineFallbackEnabled,
         messages: trimmed,
         input,
       });
     }, 400);
-  }, [messages, model, systemPrompt, temperature, memoryEnabled, antigravityEnabled, input]);
+  }, [
+    messages,
+    model,
+    systemPrompt,
+    temperature,
+    memoryEnabled,
+    antigravityEnabled,
+    offlineFallbackEnabled,
+    input,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -350,9 +419,22 @@ export default function Chat() {
     );
   };
 
+  const pushError = (message) => {
+    setErrorLog((prev) => [
+      { id: createId(), message, ts: Date.now() },
+      ...prev,
+    ].slice(0, 5));
+  };
+
   const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed || streaming) return;
+
+    const activeModel =
+      !isOnline && offlineFallbackEnabled && isCloudModelName(model) ? fallbackModel : model;
+    if (activeModel !== model) {
+      setModel(activeModel);
+    }
 
     const userMessage = {
       id: createId(),
@@ -385,7 +467,7 @@ export default function Chat() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model,
+          model: activeModel,
           stream: true,
           options: { temperature },
           messages: payloadFrom(nextMessages),
@@ -444,7 +526,9 @@ export default function Chat() {
       setLastLatency(Math.round(performance.now() - startedAt));
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setError(err.message || 'Chat failed');
+        const message = err.message || 'Chat failed';
+        setError(message);
+        pushError(message);
       }
       finalizeAssistant(assistantId);
     } finally {
@@ -459,17 +543,22 @@ export default function Chat() {
     setStatus('stopped');
   };
 
-  const followLatest = () => {
-    setAutoScroll(true);
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 0);
-  };
-
   const clearChat = () => {
-    if (streaming) return;
+    abortRef.current?.abort();
+    setStreaming(false);
+    setStatus('stopped');
     setMessages([]);
     setError('');
+    setInput('');
+  };
+
+  const stopAndClearAll = () => {
+    abortRef.current?.abort();
+    setStreaming(false);
+    setStatus('stopped');
+    setMessages([]);
+    setError('');
+    setInput('');
   };
 
   const saveMemory = async () => {
@@ -489,6 +578,10 @@ export default function Chat() {
       setTimeout(() => setMemoryStatus('idle'), 2000);
     } catch (err) {
       setMemoryStatus('error');
+      setErrorLog((prev) => [
+        { id: createId(), message: err?.message || 'Failed to save memory', ts: Date.now() },
+        ...prev,
+      ].slice(0, 5));
     }
   };
 
@@ -500,9 +593,25 @@ export default function Chat() {
   };
 
   const catalogIds = new Set(MODEL_CATALOG.map((entry) => entry.id));
-  const detectedModels = availableModels
-    ? Array.from(availableModels).filter((name) => !catalogIds.has(name)).sort()
+  const localCatalog = MODEL_CATALOG.filter((entry) => !isCloudModelName(entry.id));
+  const cloudCatalog = MODEL_CATALOG.filter((entry) => isCloudModelName(entry.id));
+  const detectedLocalModels = availableModels
+    ? Array.from(availableModels)
+        .filter((name) => !catalogIds.has(name))
+        .filter((name) => !isCloudModelName(name))
+        .sort()
     : [];
+  const detectedCloudModels = availableModels
+    ? Array.from(availableModels)
+        .filter((name) => !catalogIds.has(name))
+        .filter((name) => isCloudModelName(name))
+        .sort()
+    : [];
+  const offlineBanner = !isOnline
+    ? offlineFallbackEnabled
+      ? `Offline: forcing local model ${fallbackModel}. Cloud models disabled.`
+      : 'Offline: cloud models unavailable. Switch to a local model to continue.'
+    : '';
 
   return (
     <div className="chat-page">
@@ -514,6 +623,8 @@ export default function Chat() {
             Streaming chat routed through your local Ollama runtime. Tune the model and
             prompt, then send a run.
           </p>
+          {offlineBanner && <div className="offline-banner">{offlineBanner}</div>}
+          {modelNotice && <div className="model-toast">{modelNotice}</div>}
         </div>
         <div className="chat-controls">
           <label className="control">
@@ -523,8 +634,8 @@ export default function Chat() {
               value={model}
               onChange={(e) => setModel(e.target.value)}
             >
-              <optgroup label="Ollama Models (Local + Cloud)">
-                {MODEL_CATALOG.map((entry) => {
+              <optgroup label="Local Models (Ollama)">
+                {localCatalog.map((entry) => {
                   const installed = availableModels ? availableModels.has(entry.id) : null;
                   const suffix = installed === null ? '' : installed ? ' (installed)' : ' (not installed)';
                   return (
@@ -534,11 +645,35 @@ export default function Chat() {
                   );
                 })}
               </optgroup>
-              {detectedModels.length > 0 && (
-                <optgroup label="Detected in Ollama">
-                  {detectedModels.map((name) => (
+              {cloudCatalog.length > 0 && (
+                <optgroup label="Cloud Models (Ollama)">
+                  {cloudCatalog.map((entry) => {
+                    const installed = availableModels ? availableModels.has(entry.id) : null;
+                    const suffix = installed === null ? '' : installed ? ' (installed)' : ' (not installed)';
+                    const disabled = !isOnline;
+                    const offlineSuffix = disabled ? ' (offline)' : '';
+                    return (
+                      <option key={entry.id} value={entry.id} disabled={disabled}>
+                        {entry.id}{suffix}{offlineSuffix}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
+              {detectedLocalModels.length > 0 && (
+                <optgroup label="Detected Local Models">
+                  {detectedLocalModels.map((name) => (
                     <option key={name} value={name}>
                       {name} (installed)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {detectedCloudModels.length > 0 && (
+                <optgroup label="Detected Cloud Models">
+                  {detectedCloudModels.map((name) => (
+                    <option key={name} value={name} disabled={!isOnline}>
+                      {name} (installed){!isOnline ? ' (offline)' : ''}
                     </option>
                   ))}
                 </optgroup>
@@ -598,10 +733,18 @@ export default function Chat() {
               />
               <span>Use memory notes</span>
             </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={offlineFallbackEnabled}
+                onChange={(e) => setOfflineFallbackEnabled(e.target.checked)}
+              />
+              <span>Offline fallback</span>
+            </label>
           </div>
           <div className="control-row">
-            <button className="ghost" onClick={clearChat} disabled={streaming}>
-              Clear
+            <button className="ghost" onClick={clearChat}>
+              Clear All
             </button>
             <button className="accent" onClick={sendMessage} disabled={streaming}>
               Run
@@ -611,7 +754,7 @@ export default function Chat() {
       </div>
 
       <div className="chat-body">
-        <section className="chat-thread" ref={threadRef}>
+        <section className="chat-thread">
           {visibleMessages.length === 0 && (
             <div className="chat-empty">
               <div className="pulse-dot" />
@@ -636,14 +779,6 @@ export default function Chat() {
               <span>{error}</span>
             </div>
           )}
-          {!autoScroll && (
-            <div className="follow-indicator">
-              <span className="muted small">Output paused</span>
-              <button className="ghost mini" onClick={followLatest}>
-                Follow output
-              </button>
-            </div>
-          )}
           <div ref={bottomRef} />
         </section>
 
@@ -655,8 +790,18 @@ export default function Chat() {
               <span className={`status-pill ${status}`}>{status}</span>
             </div>
             <div className="status-row">
+              <span className="label">Network</span>
+              <span className={`status-pill ${isOnline ? 'online' : 'offline'}`}>
+                {isOnline ? 'online' : 'offline'}
+              </span>
+            </div>
+            <div className="status-row">
               <span className="label">Model</span>
               <span>{model || 'qwen2.5:7b-instruct'}</span>
+            </div>
+            <div className="status-row">
+              <span className="label">Fallback</span>
+              <span>{offlineFallbackEnabled ? 'enabled' : 'disabled'}</span>
             </div>
             <div className="status-row">
               <span className="label">Latency</span>
@@ -668,6 +813,9 @@ export default function Chat() {
             </p>
             <button className="ghost" onClick={stopStreaming} disabled={!streaming}>
               Stop Stream
+            </button>
+            <button className="ghost" onClick={stopAndClearAll}>
+              Stop + Clear All
             </button>
           </div>
           <div className="panel">
@@ -709,6 +857,26 @@ export default function Chat() {
               ))}
             </div>
           </div>
+          <div className="panel">
+            <h4>Error Log</h4>
+            {errorLog.length === 0 ? (
+              <p className="hint">No recent errors.</p>
+            ) : (
+              <details className="error-log" open>
+                <summary>{errorLog.length} recent errors</summary>
+                <div className="error-log-list">
+                  {errorLog.map((entry) => (
+                    <div key={entry.id} className="error-log-item">
+                      <span className="muted small">
+                        {new Date(entry.ts).toLocaleTimeString()}
+                      </span>
+                      <span>{entry.message}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
         </aside>
       </div>
 
@@ -728,6 +896,9 @@ export default function Chat() {
         />
         <div className="chat-actions">
           <span className="muted small">Local: Ollama | Model: {model || 'qwen2.5:7b-instruct'}</span>
+          <button className="ghost" type="button" onClick={stopStreaming} disabled={!streaming}>
+            Stop
+          </button>
           <button className="accent" type="submit" disabled={streaming}>
             {streaming ? 'Streaming...' : 'Send'}
           </button>
