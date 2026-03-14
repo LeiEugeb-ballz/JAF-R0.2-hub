@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const DEFAULT_SYSTEM =
-  'You are JAF-R0.2, a precise, high-signal operations assistant. Be concise, practical, and actionable.';
+  'You are JAF-R0.2, a precise, high-signal operations assistant and administrator of this hub. ' +
+  'Be concise, practical, and actionable. Prefer implementing changes directly in the repo over ' +
+  'pasting large code blocks into chat. Tasks is a top-level sidebar section (not under Dashboard). ' +
+  'Use and update the Tasks, Analytics, and Training sections to track work and progress.';
 
 const ANTIGRAVITY_PROMPT =
   'If you are unsure or would say you cannot, provide a best-effort answer with code or step-by-step instructions. If execution is required, outline safe commands and cautions instead of refusing.';
@@ -9,8 +12,12 @@ const ANTIGRAVITY_PROMPT =
 const LOCAL_CACHE_KEY = 'jaf_chat_cache_v1';
 const MAX_LOCAL_MESSAGES = 200;
 const MAX_LOCAL_CHARS = 100000;
+const LAST_ERROR_KEY = 'jaf_last_error_v1';
+const ADMIN_TOKEN_KEY = 'jaf_admin_token_v1';
+const TASK_PREFIX_REGEX = /^\s*(task|todo|do|fix|implement|ship|build|change|add|remove|update)\s*:\s*(.+)$/i;
 
 const OFFLINE_FALLBACKS = ['qwen2.5:7b-instruct', 'qwen2.5:latest'];
+const CONTEXT_OPTIONS = [4096, 8192, 16384, 32768];
 
 function isCloudModelName(name) {
   if (!name) return false;
@@ -86,12 +93,30 @@ function saveLocalCache(state) {
   }
 }
 
+function readAdminToken() {
+  if (typeof window === 'undefined') return '';
+  try {
+    return window.localStorage.getItem(ADMIN_TOKEN_KEY) || '';
+  } catch (err) {
+    return '';
+  }
+}
+
+function extractTaskContent(raw) {
+  if (!raw) return null;
+  const match = raw.match(TASK_PREFIX_REGEX);
+  if (!match) return null;
+  const content = match[2]?.trim();
+  return content || null;
+}
+
 export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM);
   const [model, setModel] = useState('qwen2.5:7b-instruct');
   const [temperature, setTemperature] = useState(0.7);
+  const [contextLength, setContextLength] = useState(4096);
   const [memoryText, setMemoryText] = useState('');
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [memoryStatus, setMemoryStatus] = useState('idle');
@@ -119,10 +144,12 @@ export default function Chat() {
   const latestMessagesRef = useRef(messages);
   const previousModelRef = useRef(null);
   const noticeTimerRef = useRef(null);
+  const lastAutoTaskRef = useRef({ content: '', ts: 0 });
   const latestSettingsRef = useRef({
     model,
     systemPrompt,
     temperature,
+    contextLength,
     memoryEnabled,
     antigravityEnabled,
   });
@@ -175,6 +202,7 @@ export default function Chat() {
     if (cached.model) setModel(cached.model);
     if (cached.systemPrompt) setSystemPrompt(cached.systemPrompt);
     if (typeof cached.temperature === 'number') setTemperature(cached.temperature);
+    if (typeof cached.contextLength === 'number') setContextLength(cached.contextLength);
     if (typeof cached.memoryEnabled === 'boolean') setMemoryEnabled(cached.memoryEnabled);
     if (typeof cached.antigravityEnabled === 'boolean') setAntigravityEnabled(cached.antigravityEnabled);
     if (typeof cached.offlineFallbackEnabled === 'boolean') {
@@ -253,10 +281,11 @@ export default function Chat() {
       model,
       systemPrompt,
       temperature,
+      contextLength,
       memoryEnabled,
       antigravityEnabled,
     };
-  }, [model, systemPrompt, temperature, memoryEnabled, antigravityEnabled]);
+  }, [model, systemPrompt, temperature, contextLength, memoryEnabled, antigravityEnabled]);
 
   const fallbackModel = useMemo(() => {
     if (availableModels && availableModels.size > 0) {
@@ -313,6 +342,7 @@ export default function Chat() {
         offlineFallbackEnabled,
         messages: trimmed,
         input,
+        contextLength,
       });
     }, 400);
   }, [
@@ -324,6 +354,7 @@ export default function Chat() {
     antigravityEnabled,
     offlineFallbackEnabled,
     input,
+    contextLength,
   ]);
 
   useEffect(() => {
@@ -420,10 +451,57 @@ export default function Chat() {
   };
 
   const pushError = (message) => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(
+          LAST_ERROR_KEY,
+          JSON.stringify({ message, ts: Date.now() })
+        );
+      } catch (err) {
+        // ignore
+      }
+    }
     setErrorLog((prev) => [
       { id: createId(), message, ts: Date.now() },
       ...prev,
     ].slice(0, 5));
+  };
+
+  const autoCaptureTask = async (content) => {
+    if (!content) return;
+    const now = Date.now();
+    if (
+      lastAutoTaskRef.current.content === content &&
+      now - lastAutoTaskRef.current.ts < 60000
+    ) {
+      return;
+    }
+    lastAutoTaskRef.current = { content, ts: now };
+    const adminToken = readAdminToken();
+    if (!adminToken) {
+      pushError('Auto-capture blocked: admin token missing.');
+      return;
+    }
+    const title = content.length > 120 ? `${content.slice(0, 120)}…` : content;
+    try {
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({
+          title,
+          description: content,
+          status: 'todo',
+          progress: 0,
+          priority: 'medium',
+          owner: 'Boss',
+        }),
+      });
+    } catch (err) {
+      pushError('Auto-capture failed.');
+    }
   };
 
   const sendMessage = async () => {
@@ -453,6 +531,8 @@ export default function Chat() {
     const nextMessages = [...messages, userMessage];
 
     setMessages([...nextMessages, assistantMessage]);
+    const taskContent = extractTaskContent(trimmed);
+    if (taskContent) autoCaptureTask(taskContent);
     setInput('');
     setError('');
     setStreaming(true);
@@ -469,7 +549,7 @@ export default function Chat() {
         body: JSON.stringify({
           model: activeModel,
           stream: true,
-          options: { temperature },
+          options: { temperature, num_ctx: contextLength },
           messages: payloadFrom(nextMessages),
         }),
         signal: controller.signal,
@@ -707,6 +787,23 @@ export default function Chat() {
               />
               <strong>{temperature.toFixed(1)}</strong>
             </div>
+          </label>
+          <label className="control">
+            <span>Context Length</span>
+            <select
+              className="model-select"
+              value={contextLength}
+              onChange={(e) => setContextLength(Number(e.target.value))}
+            >
+              {CONTEXT_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  {value.toLocaleString()}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              Higher context uses more RAM/VRAM. Match model capacity when available.
+            </span>
           </label>
           <label className="control">
             <span>System Prompt</span>

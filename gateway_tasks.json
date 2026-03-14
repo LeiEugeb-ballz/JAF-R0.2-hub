@@ -8,9 +8,9 @@
     "status": "done",
     "approved": true,
     "createdAt": 1773407666711,
-    "updatedAt": 1773511654777,
-    "lastRunAt": 1773511654777,
-    "output": "NAME                        ID              SIZE      MODIFIED      \nqwen2.5:7b-instruct         845dbda0ea48    4.7 GB    2 minutes ago    \nqwen2.5-coder:7b            dae161e27b0e    4.7 GB    28 hours ago     \nqwen2.5:latest              845dbda0ea48    4.7 GB    36 hours ago     \nminimax-m2.5:cloud          c0d5751c800f    -         4 days ago       \ndeepseek-v3.1:671b-cloud    d3749919e45f    -         4 days ago       \nqwen3:8b                    500a1f067a9f    5.2 GB    5 days ago       \ngpt-oss:120b-cloud          569662207105    -         11 days ago      \nllama3.2:latest             a80c4f17acd5    2.0 GB    4 weeks ago      \ntxr456/debate:latest        01e4cf3e6ad0    270 B     4 weeks ago      \nkimi-k2.5:cloud             6d1c3246c608    -         4 weeks ago      \n",
+    "updatedAt": 1773516774945,
+    "lastRunAt": 1773516774945,
+    "output": "NAME                        ID              SIZE      MODIFIED       \nqwen2.5:7b-instruct         845dbda0ea48    4.7 GB    13 minutes ago    \nqwen2.5-coder:7b            dae161e27b0e    4.7 GB    29 hours ago      \nqwen2.5:latest              845dbda0ea48    4.7 GB    37 hours ago      \nminimax-m2.5:cloud          c0d5751c800f    -         4 days ago        \ndeepseek-v3.1:671b-cloud    d3749919e45f    -         4 days ago        \nqwen3:8b                    500a1f067a9f    5.2 GB    5 days ago        \ngpt-oss:120b-cloud          569662207105    -         11 days ago       \nllama3.2:latest             a80c4f17acd5    2.0 GB    4 weeks ago       \ntxr456/debate:latest        01e4cf3e6ad0    270 B     4 weeks ago       \nkimi-k2.5:cloud             6d1c3246c608    -         4 weeks ago       \n",
     "error": ""
   }
 ]

@@ -32,6 +32,7 @@ const agentsFile = path.join(__dirname, 'agents.json');
 const tasksFile = path.join(__dirname, 'tasks.json');
 const memoryFile = path.join(__dirname, 'qwen_mem.md');
 const gatewayTasksFile = path.join(__dirname, 'gateway_tasks.json');
+const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || '').trim();
 
 const HISTORY_START = '<!--CHAT_HISTORY_JSON';
 const HISTORY_END = 'CHAT_HISTORY_JSON-->';
@@ -162,19 +163,96 @@ function isAllowedCommand(command) {
 app.get('/api/agents', (req, res) => res.json(loadData(agentsFile)));
 app.post('/api/agents', (req, res) => {
   const agents = loadData(agentsFile);
-  const newAgent = { ...req.body, id: uuidv4(), status: 'online' };
+  const newAgent = {
+    ...req.body,
+    id: uuidv4(),
+    status: 'online',
+    role: req.body?.role || 'administrator',
+  };
   agents.push(newAgent);
   saveData(agentsFile, agents);
   res.json(newAgent);
 });
 
+function normalizeTaskStatus(value) {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  const allowed = new Set(['todo', 'in_progress', 'blocked', 'done']);
+  return allowed.has(raw) ? raw : 'todo';
+}
+
+function normalizeTaskProgress(value) {
+  const num = Number.parseInt(value, 10);
+  if (Number.isNaN(num)) return 0;
+  return Math.min(100, Math.max(0, num));
+}
+
+function requireAdmin(req, res) {
+  if (!ADMIN_TOKEN) return true;
+  const token = req.headers['x-admin-token'];
+  if (typeof token === 'string' && token === ADMIN_TOKEN) return true;
+  res.status(403).json({ error: 'Admin token required' });
+  return false;
+}
+
 app.get('/api/tasks', (req, res) => res.json(loadData(tasksFile)));
 app.post('/api/tasks', (req, res) => {
+  if (!requireAdmin(req, res)) return;
   const tasks = loadData(tasksFile);
-  const newTask = { ...req.body, id: uuidv4(), priority: 'medium', column: 'todo' };
-  tasks.push(newTask);
+  const status = normalizeTaskStatus(req.body?.status || req.body?.column);
+  const now = Date.now();
+  const newTask = {
+    id: uuidv4(),
+    title: String(req.body?.title || req.body?.label || 'Untitled task'),
+    description: String(req.body?.description || ''),
+    progress: normalizeTaskProgress(req.body?.progress),
+    priority: String(req.body?.priority || 'medium'),
+    status,
+    column: status,
+    owner: String(req.body?.owner || 'unassigned'),
+    createdAt: now,
+    updatedAt: now,
+  };
+  tasks.unshift(newTask);
   saveData(tasksFile, tasks);
   res.json(newTask);
+});
+
+app.patch('/api/tasks/:id', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const tasks = loadData(tasksFile);
+  const task = tasks.find((item) => item.id === req.params.id);
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
+  }
+  if (typeof req.body?.title === 'string') task.title = req.body.title;
+  if (typeof req.body?.description === 'string') task.description = req.body.description;
+  if (typeof req.body?.priority === 'string') task.priority = req.body.priority;
+  if (typeof req.body?.owner === 'string') task.owner = req.body.owner;
+  if (req.body?.progress !== undefined) {
+    task.progress = normalizeTaskProgress(req.body.progress);
+  }
+  if (req.body?.status || req.body?.column) {
+    const status = normalizeTaskStatus(req.body.status || req.body.column);
+    task.status = status;
+    task.column = status;
+  }
+  task.updatedAt = Date.now();
+  saveData(tasksFile, tasks);
+  res.json(task);
+});
+
+app.delete('/api/tasks/:id', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const tasks = loadData(tasksFile);
+  const index = tasks.findIndex((item) => item.id === req.params.id);
+  if (index === -1) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
+  }
+  const [removed] = tasks.splice(index, 1);
+  saveData(tasksFile, tasks);
+  res.json({ ok: true, task: removed });
 });
 
 app.get('/api/memory', (req, res) => {
@@ -458,8 +536,12 @@ io.on('connection', (socket) => {
   socket.on('register-agent', (agent) => {
     const agents = loadData(agentsFile);
     const existing = agents.find(a => a.id === agent.id);
-    if (existing) existing.status = 'online';
-    else agents.push({ ...agent, status: 'online' });
+    if (existing) {
+      existing.status = 'online';
+      if (agent.role) existing.role = agent.role;
+    } else {
+      agents.push({ ...agent, status: 'online', role: agent.role || 'administrator' });
+    }
     saveData(agentsFile, agents);
     io.emit('agents-update', agents);
   });

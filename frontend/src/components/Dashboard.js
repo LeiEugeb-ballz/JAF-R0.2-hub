@@ -125,7 +125,12 @@ function Dashboard() {
           <div className="agents">
             {agents.map((agent) => (
               <div key={agent.id} className={`agent-card ${agent.status}`}>
-                <p>{agent.name} ({agent.status})</p>
+                <div>
+                  <p>{agent.name}</p>
+                  <p className="muted small">
+                    {agent.role || 'administrator'} · {agent.status}
+                  </p>
+                </div>
               </div>
             ))}
             {agents.length === 0 && <p className="muted small">No agents registered yet.</p>}

@@ -1,4 +1,5 @@
 :root {
+  --ticker-height: 28px;
   --ink: #0a0d12;
   --ink-soft: #12161f;
   --card: rgba(18, 22, 31, 0.9);
@@ -14,8 +15,57 @@
 .app-shell {
   display: flex;
   min-height: 100vh;
+  padding-top: var(--ticker-height);
   position: relative;
   z-index: 1;
+}
+
+.ticker {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--ticker-height);
+  background: rgba(6, 8, 12, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.ticker-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 36px;
+  padding-left: 100%;
+  animation: ticker-scroll 38s linear infinite;
+  white-space: nowrap;
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.ticker-item::before {
+  content: '•';
+  color: var(--accent-2);
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 .ambient-orbit {
@@ -765,6 +815,242 @@ textarea {
   gap: 12px;
 }
 
+.tasks-page,
+.analytics-page,
+.training-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tasks-header,
+.analytics-header,
+.training-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.task-stats,
+.analytics-status,
+.training-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stat-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 90px;
+}
+
+.tasks-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2.6fr);
+  gap: 18px;
+}
+
+.task-form-panel {
+  gap: 16px;
+}
+
+.task-admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-form-panel.read-only {
+  opacity: 0.7;
+}
+
+.task-form-panel.read-only input,
+.task-form-panel.read-only textarea,
+.task-form-panel.read-only select {
+  cursor: not-allowed;
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.task-error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  background: rgba(255, 80, 80, 0.1);
+  color: #ffb3b3;
+  font-size: 12px;
+}
+
+.tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.task-column {
+  min-height: 240px;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-card {
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card.editing {
+  background: rgba(31, 209, 161, 0.08);
+  border-color: rgba(31, 209, 161, 0.3);
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.progress-track,
+.metric-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-fill,
+.metric-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), #65e7c5);
+  border-radius: 999px;
+}
+
+.task-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.status-pill.todo {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
+
+.status-pill.in_progress {
+  background: rgba(90, 140, 255, 0.2);
+  color: #8fb5ff;
+}
+
+.status-pill.blocked {
+  background: rgba(255, 140, 60, 0.2);
+  color: var(--accent);
+}
+
+.status-pill.done {
+  background: rgba(31, 209, 161, 0.2);
+  color: var(--accent-2);
+}
+
+.analytics-grid,
+.training-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.metric-stack,
+.skill-stack,
+.improvement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.metric-row,
+.skill-row,
+.improvement-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.skill-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.improvement-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.training-targets {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.governance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
 @media (max-width: 1100px) {
   .chat-header,
   .chat-body {
@@ -776,6 +1062,10 @@ textarea {
   }
 
   .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tasks-layout {
     grid-template-columns: 1fr;
   }
 }
