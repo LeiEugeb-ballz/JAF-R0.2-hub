@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ab1ba830-a3d9-419f-b128-506a25525902",
+    "label": "Echo External",
+    "command": "ollama list",
+    "kind": "shell",
+    "scope": "external",
+    "status": "approved",
+    "approved": true,
+    "createdAt": 1773407666711,
+    "updatedAt": 1773407667239,
+    "lastRunAt": null,
+    "output": "",
+    "error": ""
+  }
+]

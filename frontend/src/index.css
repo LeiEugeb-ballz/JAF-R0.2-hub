@@ -1,12 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fira+Code:wght@400;600&family=Oxanium:wght@300;400;500;600;700&display=swap');
+
+:root {
+  color-scheme: dark;
+  --font-display: 'Oxanium', 'Segoe UI', sans-serif;
+  --font-body: 'Atkinson Hyperlegible', 'Segoe UI', sans-serif;
+  --font-mono: 'Fira Code', 'SFMono-Regular', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: Roboto, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #121212; /* Dark theme per spec */
-  color: #e0e0e0;
+  background:
+    radial-gradient(1200px 600px at 85% -20%, rgba(20, 170, 140, 0.28), transparent 60%),
+    radial-gradient(900px 500px at 10% 5%, rgba(255, 140, 60, 0.25), transparent 60%),
+    linear-gradient(160deg, #0a0b0f 0%, #10131c 42%, #0d0f14 100%);
+  color: #e9eef2;
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
